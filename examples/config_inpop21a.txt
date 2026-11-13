@@ -1,0 +1,28 @@
+# INPOP21a (TDB) — Moon → TCL-TCB
+# KEY=value config sourced by run_tempus.sh.
+
+# TDB flavour: same timescale as DE and EPM, so results are directly comparable.
+EPH_FILES="../data/ephem/inpop21a_TDB_m100_p100_tt.dat"
+# TCB-native flavour alternative (then swap --out-tt-tdb for --out-tcg-tcb in EXTRA_ARGS):
+#EPH_FILES="../data/ephem/inpop21a_TCB_m100_p100_tcg.dat"
+
+AST_FILE="../data/kernels/sb441-n373s.bsp"     # DE441 asteroid trajectories
+AST_GM_FILES="../data/ephem/header_mba.21a"    # INPOP21a MBA GM values
+#AST_IDS="1,2,4,7,324"                         # unset -> all asteroids with GM
+
+TARGET="MOON"       # NAIF 301 -> TCL; EARTH_CENTER -> TCG, MARS_BARYCENTER -> TCM
+
+# +-100 years around J2000, 0.75-day (18 h) steps, JD in the file's native scale (TDB).
+# For an epoch exact to the ns (e.g. the 1977 convention origin), compute the split
+# JD with tempus.jd_tt_to_tdb() — see notebooks/00_tempus_background.ipynb §7.2.
+JD_START_INT=$(( 2451545 - 36525 )); JD_START_FRAC=0.0
+JD_END_INT=$((   2451545 + 36525 )); JD_END_FRAC=0.0
+JD_STEP=0.75
+
+OUT_CSV="../output/moon_m100_p100_INPOP21aTDB.csv"
+
+# dTCX/dTCB rate column + the file's own TT-TDB time ephemeris (INPOP TDB releases).
+# If you switch EPH_FILES to the TCB flavour above, swap --out-tt-tdb for --out-tcg-tcb.
+# Other flags worth knowing: --sun-j2 (solar quadrupole), --pn1 (drop the
+# O(c^-4) PN2 term, which is otherwise included by default).
+EXTRA_ARGS="--out-rate --out-tt-tdb"

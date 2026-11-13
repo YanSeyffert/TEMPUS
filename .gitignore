@@ -1,0 +1,25 @@
+.venv/
+.env
+.pytest_cache/
+__pycache__/
+.ipynb_checkpoints/
+*.pyc
+
+tempus.egg-info/
+build/
+dist/
+
+# outputs written by the examples and notebooks
+output/*
+!output/.gitkeep
+
+# downloaded data (scripts/download_data.sh, scripts/fetch_klioner_asc.py);
+# .bsp/.tpc/.tls are ignored in data/kernels/.gitignore. The locally built GM
+# headers (data/ephem/header_mba.*, data/kernels/header_kbo.440) stay tracked.
+data/ephem/*.dat
+data/kernels/header.440
+data/kernels/header.430_572
+data/kernels/header.21h
+data/time_ephem/
+data/LTE440-tcl_tdb/
+*.part

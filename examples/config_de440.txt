@@ -1,0 +1,27 @@
+# JPL DE440 (TDB) — Moon → TCL-TCB
+# KEY=value config sourced by run_tempus.sh.
+
+# DE ships as SPICE BSP; the .tpc carries the GM constants.
+EPH_FILES="../data/kernels/de440.bsp ../data/kernels/gm_de440.tpc"
+
+# Asteroid perturbers: DE441 BSP; GMs supplemented from JPL DE header files
+# (MBA GMs in header.440, KBO/TNO GMs in header_kbo.440).
+AST_FILE="../data/kernels/sb441-n373s.bsp"
+AST_GM_FILES="../data/kernels/header.440 ../data/kernels/header_kbo.440"
+AST_IDS="1,2,4,7,324"    # Big-5 MBAs; comment out to use all asteroids with GM
+
+TARGET="MOON"       # NAIF 301 -> TCL; EARTH_CENTER -> TCG, MARS_BARYCENTER -> TCM
+
+# +-100 years around J2000, 0.75-day (18 h) steps, JD in TDB (DE native scale;
+# TEMPUS auto-detects this and applies the L_B rescaling internally).
+JD_START_INT=$(( 2451545 - 36525 )); JD_START_FRAC=0.0
+JD_END_INT=$((   2451545 + 36525 )); JD_END_FRAC=0.0
+JD_STEP=0.75
+
+OUT_CSV="../output/moon_m100_p100_DE440_BIG5.csv"
+
+# dTCX/dTCB rate column. DE files have no INPOP-style time ephemeris, so
+# --out-tt-tdb / --out-tcg-tcb aren't available here. Other flags worth
+# knowing: --sun-j2 (solar quadrupole), --pn1 (drop the O(c^-4) PN2 term,
+# which is otherwise included by default).
+EXTRA_ARGS="--out-rate"

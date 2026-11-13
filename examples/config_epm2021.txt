@@ -1,0 +1,24 @@
+# EPM2021 (TDB, SPICE format) — Moon → TCL-TCB
+# KEY=value config sourced by run_tempus.sh.
+
+# EPM ships as .bsp + .tpc; the .tpc carries the GM constants.
+EPH_FILES="../data/kernels/epm2021.bsp ../data/kernels/epm2021.tpc"
+
+# Asteroid perturbers: DE430 asteroid BSP with EPM2021 GM values (header.21h).
+AST_FILE="../data/kernels/ast343de430.bsp"
+AST_GM_FILES="../data/kernels/header.21h"
+
+TARGET="MOON"       # NAIF 301 -> TCL; EARTH_CENTER -> TCG, MARS_BARYCENTER -> TCM
+
+# ~1970-2052 (limited by ast343de430.bsp coverage), 0.75-day steps, JD in TDB.
+JD_START_INT=2440587; JD_START_FRAC=0.5
+JD_END_INT=2470586;   JD_END_FRAC=0.75
+JD_STEP=0.75
+
+OUT_CSV="../output/moon_EPM2021_ast.csv"
+
+# dTCX/dTCB rate column. EPM files have no INPOP-style time ephemeris, so
+# --out-tt-tdb / --out-tcg-tcb aren't available here. Other flags worth
+# knowing: --sun-j2 (solar quadrupole), --pn1 (drop the O(c^-4) PN2 term,
+# which is otherwise included by default).
+EXTRA_ARGS="--out-rate"

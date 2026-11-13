@@ -1,0 +1,25 @@
+# JPL DE430 (TDB) — Moon → TCL-TCB
+# KEY=value config sourced by run_tempus.sh.
+
+# Older DE release (better suited for Moon ephemerides); GMs from the DE431 tpc.
+EPH_FILES="../data/kernels/de430.bsp ../data/kernels/gm_de431.tpc"
+
+# Asteroid perturbers: DE430 asteroid BSP with GMs from its DE header file.
+# header with GMs from https://ssd.jpl.nasa.gov/ftp/eph/planets/ascii/de430/
+AST_FILE="../data/kernels/ast343de430.bsp"
+AST_GM_FILES="../data/kernels/header.430_572"
+
+TARGET="MOON"       # NAIF 301 -> TCL; EARTH_CENTER -> TCG, MARS_BARYCENTER -> TCM
+
+# ~1970-2052 (limited by ast343de430.bsp coverage), 0.75-day steps, JD in TDB.
+JD_START_INT=2440587; JD_START_FRAC=0.5
+JD_END_INT=2470586;   JD_END_FRAC=0.75
+JD_STEP=0.75
+
+OUT_CSV="../output/moon_DE430_ast.csv"
+
+# dTCX/dTCB rate column. DE files have no INPOP-style time ephemeris, so
+# --out-tt-tdb / --out-tcg-tcb aren't available here. Other flags worth
+# knowing: --sun-j2 (solar quadrupole), --pn1 (drop the O(c^-4) PN2 term,
+# which is otherwise included by default).
+EXTRA_ARGS="--out-rate"
