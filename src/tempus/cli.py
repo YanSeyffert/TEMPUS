@@ -13,7 +13,8 @@ import sys
 import numpy as np
 
 from . import __version__
-from .model import Delta_TCX, Delta_TCX_TCY, jd_grid, jd_tdb_to_tcb, per_leg_ext_bodies, DAY_S, L_B
+from .model import (Delta_TCX, Delta_TCX_TCY, TimeGrid, TimeScalar, jd_grid, jd_origin_1977, jd_tdb_to_tcb,
+                    per_leg_ext_bodies, relabel_to_tcx, value_at_epoch, DAY_S, L_B)
 from .bodies import parse_body, ext_list, DEFAULT_EXT_KEYS, NAIF
 
 
@@ -29,6 +30,14 @@ def _path_for_metadata(path: str | Path) -> str:
         return p.relative_to(tempus_root).as_posix()
     except ValueError:
         return str(p)
+
+
+def _is_origin_1977(epoch, timescale) -> bool:
+    """True if a split-JD epoch (int, frac) is the IAU 1977 origin on a TCB or TDB axis."""
+    if timescale not in ("TCB", "TDB"):
+        return False
+    t0 = jd_origin_1977(timescale)
+    return int(epoch[0]) == t0.int_part and abs(float(epoch[1]) - float(t0.frac_part)) < 1e-15
 
 
 def _parse_int_csv(raw: str | None) -> list[int]:
@@ -210,6 +219,27 @@ def _cmd_integrate(args: argparse.Namespace) -> int:
             jd_step_native = jd_step / (np.float64(1.0) - l_b)
             print(f"  Converted TDB input grid to TCB (IAU 2006 B3, L_B={l_b:.12e}); native TCB step: {float(jd_step_native):.17g} d")
 
+        # --zero epoch on the grid's own axis (bare --zero: the IAU 1977 origin),
+        # checked against the grid before integrating.
+        zero_epoch = None
+        if args.zero is not None:
+            if len(args.zero) == 0:
+                zero_epoch = jd_origin_1977(ts_label)
+            elif len(args.zero) == 2:
+                zero_epoch = TimeScalar(int(args.zero[0]), np.float64(0.0)) + float(args.zero[1])
+            else:
+                raise ValueError("--zero takes either no values (1977 origin) or a split JD: INT FRAC.")
+            at = (zero_epoch.int_part, float(zero_epoch.frac_part))
+            lo = (int(grid.jd_int[0]), float(grid.jd_frac[0]))
+            hi = (int(grid.jd_int[-1]), float(grid.jd_frac[-1]))
+            if not lo <= at <= hi:
+                what = "the 1977 origin" if len(args.zero) == 0 else "the epoch"
+                raise ValueError(f"--zero: {what} (JD_{ts_label} {at[0]} {at[1]!r}) lies outside the grid "
+                                 f"{lo[0]}+{lo[1]!r} .. {hi[0]}+{hi[1]!r}; extend --jd-start/--jd-end to include "
+                                 "it, or omit --zero so the offset is zero at the integration start.")
+            if grid.jd_int.size < 12:
+                raise ValueError(f"--zero needs at least 12 grid points to interpolate, the grid has {grid.jd_int.size}.")
+
         # GM provider directly from ephemeris constants, converted to SI
         gm_provider = lambda b: eph.gm_m3_s2(int(b))
 
@@ -243,6 +273,23 @@ def _cmd_integrate(args: argparse.Namespace) -> int:
             delta, rate = Delta_TCX(center=center_ref.naif, **model_kwargs)
             drift_label = "TCB-TCX"
             col_name_main = "TCB_minus_TCX"
+
+        # Optional zero: by default the integration starts at 0 on the first
+        # sample; --zero moves that free constant to an epoch on the grid's own
+        # axis (bare --zero: the IAU 1977 origin), interpolating there.
+        if zero_epoch is not None:
+            shift = value_at_epoch(grid.jd_int, grid.jd_frac, delta, zero_epoch)
+            delta = delta - shift
+            zero = {"epoch": [zero_epoch.int_part, float(zero_epoch.frac_part)], "timescale": ts_label,
+                    "origin": "IAU 1977" if _is_origin_1977(tuple(zero_epoch), ts_label) else "custom",
+                    "method": "local polynomial through the 12 nearest samples", "shift_s": float(-shift)}
+            print(f"  zeroed: {col_name_main} = 0 at JD {zero_epoch.int_part} + {float(zero_epoch.frac_part)!r} "
+                  f"({ts_label}) (shift {-shift:+.17g} s)")
+        else:
+            first = (int(grid.jd_int[0]), float(grid.jd_frac[0]))
+            zero = {"epoch": list(first), "timescale": ts_label,
+                    "origin": "IAU 1977" if _is_origin_1977(first, ts_label) else "integration start",
+                    "method": "first sample", "shift_s": 0.0}
 
         span_days = float((grid.jd_int[-1] - grid.jd_int[0]) + (grid.jd_frac[-1] - grid.jd_frac[0]))
         drift_ms_per_day = (delta[-1] - delta[0]) / span_days * 1e3 if span_days > 0.0 else np.nan
@@ -314,6 +361,8 @@ def _cmd_integrate(args: argparse.Namespace) -> int:
             # free constant (the only column `chebyshev --anchor` may act on)
             # and it's the default `chebyshev --column` target.
             "tempus_integrated_column": col_name_main,
+            # Epoch where the integrated column is 0: the --zero epoch, or the first sample.
+            "zero": zero,
         }
 
         out_path = args.out or auto_out_name(target_ref, center_ref, grid, eph.path,
@@ -360,8 +409,11 @@ def _cmd_chebyshev(args: argparse.Namespace) -> int:
         # differs from 86400 s only by O(L_B) — negligible against fit residuals.
         dy = (np.float64(1.0) - cols[rate_col]) * DAY_S
 
+    # Timescale of the CSV's JD axis, as recorded by integrate.
+    native_ts = (meta or {}).get("in_timescale")
+
     # Anchoring (opt-in): zero the series at a chosen epoch; bare --anchor
-    # means the 1977 origin, where all TCX read the same JD by definition.
+    # means the 1977 origin, where TCB, TCG and TT all read T0 by definition.
     # A standalone value convention; but note that --also-wrt-tcx builds the TCX
     # axis from Delta itself (T = t - Delta/86400), so the value's zero
     # convention also fixes the zero convention of the TCX argument labels.
@@ -379,7 +431,14 @@ def _cmd_chebyshev(args: argparse.Namespace) -> int:
                 "fixed by definition, not by TEMPUS's integration."
             )
         if len(args.anchor) == 0:
-            anchor = (2443144, np.float64(0.5003725))  # 1977-01-01.0 TAI origin
+            # 1977-01-01.0 TAI origin on the CSV's own axis (TCB: T0; TDB: T0 + TDB0/86400).
+            if native_ts not in ("TCB", "TDB"):
+                raise ValueError(
+                    f"Bare --anchor needs the CSV's timescale (in_timescale in the .run.json, "
+                    f"got {native_ts!r}) to place the 1977 origin; pass --anchor INT FRAC instead."
+                )
+            t0 = jd_origin_1977(native_ts)
+            anchor = (t0.int_part, t0.frac_part)
         elif len(args.anchor) == 2:
             anchor = (int(args.anchor[0]), np.float64(args.anchor[1]))
         else:
@@ -437,15 +496,23 @@ def _cmd_chebyshev(args: argparse.Namespace) -> int:
             gran.coeffs[0] -= shift
         y = y - shift          # samples too: they carry the TCX labels below
         stats = {**stats, "mean_error": stats["mean_error"] - shift}
-        print(f"  anchored: series zeroed at JD {anchor[0]} + {float(anchor[1])} (shift {-shift:+.9f} s)")
+        print(f"  anchored: series zeroed at JD {anchor[0]} + {float(anchor[1])} (shift {-shift:+.17g} s)")
 
     # Foolproofing: every .asc carries which clock labels its axis and
     # where the series is zeroed, so two files can never be silently
     # subtracted across a mismatched argument timescale or zero convention
     # (see notebooks/09_argument_timescale.ipynb).
-    native_ts = (meta or {}).get("t_timescale") or "native"
-    zero_tag = (f"zero=JD{anchor[0]}+{float(anchor[1]):.7f}" if anchor is not None
-                else "zero=integration-start")
+    # Where the series is 0, on which axis, and whether that is the IAU 1977 origin:
+    # --anchor, else the run's recorded zero, else (1.0.0 runs) the first sample.
+    if anchor is not None:
+        zero_at = (anchor[0], float(anchor[1]))
+    elif (meta or {}).get("zero"):
+        zero_at = tuple(meta["zero"]["epoch"])
+    else:
+        zero_at = (int(jd_int[0]), float(jd_frac[0]))
+    zero_kind = "IAU1977" if _is_origin_1977(zero_at, native_ts) else "custom"
+    native_ts = native_ts or "native"
+    zero_tag = f"zero={native_ts}:JD{zero_at[0]}+{float(zero_at[1])!r}({zero_kind})"
     title_bits = ""
     if meta:
         bits = [meta.get("target"), Path(meta.get("ephem_file") or "").stem or None]
@@ -462,7 +529,6 @@ def _cmd_chebyshev(args: argparse.Namespace) -> int:
 
     ok_all = ok
     if args.also_wrt_tcx:
-        from .model import TimeGrid, relabel_to_tcx
         # Exact per-sample relabelling; the values y are unchanged. TCX is
         # never written alone: it always accompanies the native product above,
         # sharing the same run, fit settings and anchor.
@@ -596,6 +662,18 @@ def build_parser() -> argparse.ArgumentParser:
             "Has no effect on TDB-scale ephemerides."
         ),
     )
+    pc.add_argument(
+        "--zero", nargs="*", type=float, metavar="INT FRAC", default=None,
+        help=(
+            "Zero the integrated column at an epoch before writing the CSV, instead of at "
+            "the first sample. Bare --zero uses the IAU 1977 origin (1977-01-01 00:00:00 TAI) "
+            "on the grid's own axis: JD_TCB 2443144 0.5003725 on a TCB axis, "
+            "JD_TDB 2443144 0.5003724992418982 (= T0 + TDB0/86400) on a TDB axis. "
+            "--zero INT FRAC uses a custom split-JD epoch on that axis. The epoch must lie "
+            "inside the grid; the value there comes from a local polynomial through the "
+            "12 nearest samples."
+        ),
+    )
 
     # Output filename
     pc.add_argument(
@@ -659,11 +737,14 @@ def build_parser() -> argparse.ArgumentParser:
                     help="Output .asc path for the native product (default: CSV path with .asc "
                          "extension). The --also-wrt-tcx companion always uses the CSV stem + _tcx.asc.")
     ph.add_argument(
-        "--anchor", nargs="*", type=float, metavar="JD", default=None,
+        "--anchor", nargs="*", type=float, metavar="INT FRAC", default=None,
         help=(
-            "Zero the fitted series at an epoch instead of the integration start. "
-            "Bare --anchor uses the 1977 origin (2443144 0.5003725 — all TCX read the "
-            "same JD there by definition); --anchor INT FRAC uses a custom split-JD "
+            "Zero the fitted series at an epoch instead of the integration start, "
+            "for CSVs written without integrate --zero. "
+            "Bare --anchor uses the 1977 origin (1977-01-01 00:00:00 TAI), placed on the axis "
+            "named by the run's in_timescale: JD_TCB 2443144 0.5003725 on a TCB axis, "
+            "JD_TDB 2443144 0.5003724992418982 (= T0 + TDB0/86400) on a TDB axis; "
+            "--anchor INT FRAC uses a custom split-JD "
             "epoch (native timescale, must lie inside the CSV span). With --also-wrt-tcx "
             "the anchor also fixes the zero convention of the TCX argument labels."
         ),

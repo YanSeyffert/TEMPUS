@@ -195,6 +195,44 @@ def relabel_to_tcx(grid: TimeGrid, y) -> TimeGrid:
     return grid + (-np.asarray(y, dtype=np.float64) / DAY_S)
 
 
+def jd_origin_1977(timescale: str) -> TimeScalar:
+    """
+    The IAU 1977 origin (1977-01-01 00:00:00 TAI at the geocentre) on a TCB or
+    TDB axis.  TCB, TCG and TT all read T0 = JD 2443144.5003725 at that event;
+    a TDB axis reads the same event at T0 + TDB0/86400 (IAU 2006 Res. B3).
+    """
+    t0 = TimeGrid(jd_int=np.array([_T0_INT]), jd_frac=np.array([_T0_FRAC]))
+    if timescale == "TDB":
+        t0 = jd_tcb_to_tdb(t0)
+    elif timescale != "TCB":
+        raise ValueError(f"The 1977 origin is placed on a TCB or TDB axis, got {timescale!r}.")
+    return TimeScalar(int(t0.jd_int[0]), np.float64(t0.jd_frac[0]))
+
+
+def value_at_epoch(jd_int, jd_frac, y, epoch: TimeScalar, *, n_points: int = 12) -> np.float64:
+    """
+    Value of a sampled series at one epoch, from a local polynomial (degree
+    n_points - 1) through the n_points samples nearest to it.
+
+    Used to zero an integration at an epoch between grid nodes.  On the usual
+    18-h grid, 12 points interpolate TCL-TCB to ~3e-14 s, below the 18-h
+    integration's own error (~1e-12 s rms for the Moon).  The epoch must lie
+    inside the sampled span: there is no extrapolation.
+    """
+    jd_int = np.asarray(jd_int, dtype=np.int64)
+    jd_frac = np.asarray(jd_frac, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    if y.size < n_points:
+        raise ValueError(f"Need at least {n_points} samples to interpolate, got {y.size}.")
+    at = (int(epoch.int_part), float(epoch.frac_part))
+    if not (int(jd_int[0]), float(jd_frac[0])) <= at <= (int(jd_int[-1]), float(jd_frac[-1])):
+        raise ValueError(f"Epoch {at[0]}+{at[1]!r} lies outside the sampled span "
+                         f"{int(jd_int[0])}+{float(jd_frac[0])!r} .. {int(jd_int[-1])}+{float(jd_frac[-1])!r}.")
+    t = (jd_int - at[0]).astype(np.float64) + (jd_frac - at[1])    # days from the epoch
+    near = np.argsort(np.abs(t))[:n_points]
+    return np.float64(np.polynomial.Polynomial.fit(t[near], y[near], n_points - 1)(0.0))
+
+
 def jd_tt_to_tdb(
     tt_int: int,
     tt_frac: np.float64,

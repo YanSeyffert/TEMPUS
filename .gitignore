@@ -23,3 +23,6 @@ data/kernels/header.21h
 data/time_ephem/
 data/LTE440-tcl_tdb/
 *.part
+
+# INPOP benchmark run for notebook 06 §1-5; not distributed, kept locally only
+data/cheby_benchmarks/

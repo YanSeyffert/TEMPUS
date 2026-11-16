@@ -13,16 +13,16 @@ AST_GM_FILES="../data/ephem/header_mba.21a"    # INPOP21a MBA GM values
 TARGET="MOON"       # NAIF 301 -> TCL; EARTH_CENTER -> TCG, MARS_BARYCENTER -> TCM
 
 # +-100 years around J2000, 0.75-day (18 h) steps, JD in the file's native scale (TDB).
-# For an epoch exact to the ns (e.g. the 1977 convention origin), compute the split
-# JD with tempus.jd_tt_to_tdb() — see notebooks/00_tempus_background.ipynb §7.2.
 JD_START_INT=$(( 2451545 - 36525 )); JD_START_FRAC=0.0
 JD_END_INT=$((   2451545 + 36525 )); JD_END_FRAC=0.0
 JD_STEP=0.75
 
 OUT_CSV="../output/moon_m100_p100_INPOP21aTDB.csv"
 
+# --zero: TCB-TCX = 0 at the IAU 1977 origin (inside this span) instead of at the
+# first sample.
 # dTCX/dTCB rate column + the file's own TT-TDB time ephemeris (INPOP TDB releases).
 # If you switch EPH_FILES to the TCB flavour above, swap --out-tt-tdb for --out-tcg-tcb.
 # Other flags worth knowing: --sun-j2 (solar quadrupole), --pn1 (drop the
 # O(c^-4) PN2 term, which is otherwise included by default).
-EXTRA_ARGS="--out-rate --out-tt-tdb"
+EXTRA_ARGS="--zero --out-rate --out-tt-tdb"

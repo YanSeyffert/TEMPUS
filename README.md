@@ -1,5 +1,7 @@
 # TEMPUS Integrator
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24199182.svg)](https://doi.org/10.5281/zenodo.24199182) [![arXiv](https://img.shields.io/badge/arXiv-2609.08979-b31b1b.svg)](https://arxiv.org/abs/2609.08979)
+
 TEMPUS is a self developed lightweight tool for **ephemeris-driven time-coordinate integration**. *Tempus* is the latin word for *time*. 
 
 It computes relativistic time-coordinate offsets (e.g., **TCM–TCB**) by numerically integrating post-Newtonian models along a target body's ephemeris-defined trajectory/worldline. TEMPUS is *ephemeris-agnostic* and supports JPL/INPOP/EPM solutions via **CALCEPH** (native binary ephemerides such as `.jpl`, `.tcheb`, `.dat`), which can also handle Spice Kernels (eg. `de440.bsp`, plus time and constants kernels).
@@ -104,18 +106,19 @@ TEMPUS provides a CLI for reproducible/automatable runs. See the folder `example
 CLI example computing TCB-TCM for Mars (w.r.t. SSB) over 100 years, which outputs a .csv file and a corresponding .json file with metadata of the run/command:
 
 ```bash
-# Compute TCB-TCM for Mars with CALCEPH backend, 1977 origin to ~2077 in JD(TCB)
+# Compute TCB-TCM for Mars with CALCEPH backend, 1977 to ~2077 in JD(TCB), zeroed at the 1977 origin
 tempus integrate \
   --eph-file data/ephem/inpop19a_TCB_m100_p100_tcg.dat \
-  --jd-start 2443144 0.5003725001588464 \
+  --jd-start 2443144 0.5 \
   --jd-end   2479669 0.5 \
   --jd-step  0.75 \
   --target MARS_BARYCENTER \
-  --out output/mars_1977_2077_tcm.csv
+  --out output/mars_1977_2077_tcm.csv \
+  --zero
 ```
 
 Notes:
-- `--jd-start` in aboves example is the 1st January 1977 origin (where TCG-TCB = 0 by convention), expressed in TCB — see `notebooks/00_tempus_background.ipynb`. This is the natural starting point for origins of relativistic timescales, as to not stray from the Earth's case IAU recommendation. 
+- `--jd-start` is 1 January 1977, 0h TCB. The run doesn't have to start exactly at the 1977 origin (1977-01-01 00:00:00 TAI, where TCG-TCB = 0 by IAU convention): `--zero` puts TCB-TCM = 0 there, at JD_TCB 2443144 0.5003725 on this TCB axis (JD_TDB 2443144 0.5003724992418982 for TDB ephemerides) — see `notebooks/00_tempus_background.ipynb`. 
 - `--jd-end` is 100 Julian years (36525 days) later.
 - `--jd-step 0.75` (18 h) is a standard ephemeris cadence and plays well with the default `am12` integrator.
 - Time sampling is controlled by these three arguments above. **All JD inputs are interpreted in the ephemeris's native timescale**; TDB for most ephemerides, TCB for the TCB releases of INPOP. For TCB-scale ephemerides, `--input-jd-are-tdb` lets you give TDB inputs instead: the grid is built in TDB and every point is internally converted to TCB (via IAU 2006 Res. B3, linear relation). Output CSV includes split time columns `JD_int`, `JD_frac`, and `SecondsPastJ2000` (in the native timescale of the ephemeris).
@@ -123,6 +126,7 @@ Notes:
 - `--center` when omitted defaults to the solar system barycenter (thus TCB) as reference. 
 - `--ext` when omitted defaults to resolving the perturbing bodies automatically (Sun + planets + Pluto, excluding the target; + given asteroids); an explicit comma-separated list is also accepted.
 - `--integrator` defaults to `am12` (Adams-Moulton 12-step). Other options: `trapz`, `rk4`, `am4`, `am8`, `am10`, `amk`.
+- `--zero` writes the offset already zeroed at the 1977 origin, or at a given `--zero INT FRAC`; without it, the timescale offset is 0s at the first sample.
 - Omitting `--out` auto-generates the filename as `{tcx}_{mYYYY}_{pYYYY}_{ephem}.csv` — target timescale tag, whole years before/after J2000 covered by the grid, ephemeris stem (the run above would yield `tcmars_m0023_p0077_inpop19a_tcb.csv`).
 - More options available via `tempus integrate --help`.
 
@@ -137,7 +141,7 @@ tempus chebyshev output/mars_1977_2077_tcm.csv --max-err 1e-9
 - Defaults (`--order 11 --granule-len 4 --npoints 10 --dist 2`) are tuned for timescale-difference series; `--column` selects another CSV column.
 - `--use-rate` feeds the rate column (from `integrate --out-rate`) into the fit as derivative information and enables `--dist 1` (C¹ node distribution). Measured guidance: derivative information only helps for sparse sampling (≲ 8 samples per granule — there it wins by orders of magnitude); at the INPOP-standard 0.75 d cadence with 3–4 d granules it changes nothing, and `--dist 1` can be slightly *worse* than the default `--dist 2`.
 - `--also-wrt-tcx` additionally re-labels the offset onto the local timescale TCX and writes a **second** file (`out.asc` native, `out_tcx.asc` wrt TCX) — they are different functions (~0.7 µs/century for TCG, ~0.3 for TCM; Klioner 2026), not a constant offset apart. TCX is never written alone, so a `_tcx.asc` file can never be mistaken for a normal product; it always shares its native sibling's run. Theory, demonstration, and model-independent validation against Klioner's own inverse products for Earth and Mars in `notebooks/08_argument_timescale.ipynb`.
-- `--anchor` zeroes the fitted series at an epoch other than the integration start: bare `--anchor` uses the 1977 origin (where all TCX coincide by definition), or `--anchor INT FRAC` a custom split-JD epoch. This is a standalone output convention; with `--also-wrt-tcx` it also fixes the zero convention of the TCX argument labels (without it, the relabelled axis is offset from the conventional TCX by the series' value at the integration start). Every `.asc` records its argument timescale and zero convention in its title line, so which convention a file uses is never ambiguous from the outside.
+- `--anchor` zeroes the fitted series at an epoch other than the integration start, for CSVs written without `integrate --zero`: bare `--anchor` uses the 1977 origin (where all TCX defined by the IAU so far coincide by definition), or `--anchor INT FRAC` a custom split-JD epoch. This is a standalone output convention; with `--also-wrt-tcx` it also fixes the zero convention of the TCX argument labels (without it, the relabelled axis is offset from the conventional TCX by the series' value at the integration start). Every `.asc` records its argument timescale and zero convention in its title line, so which convention a file uses is never ambiguous from the outside.
 - A **fit-quality gate** runs by default and the command exits non-zero on failure, so scripts cannot silently ship a bad `.asc`. With `--max-err` the maximum residual against the samples is the binding criterion; without it the coefficient-tail convergence is checked (note: near machine-precision fits the tail flattens into the float64 noise floor and reports `converged: False` — prefer an explicit `--max-err` budget). `--auto` retries with higher order / smaller granules; `--no-validate` skips the gates.
 - The `.asc` title line carries provenance (column, target, ephemeris, timescale). Load it back with `tempus.chebycode.ChebyshevSeries.from_asc()`.
 

@@ -30,7 +30,7 @@ def _make_csv(path: Path, with_rate: bool = False):
     if with_rate:
         dy_per_day = 0.5 * np.cos(0.5 * t) + 0.01
         cols["dTCX_dTCB"] = 1.0 - dy_per_day / 86400.0
-    write_csv(path, cols, meta={"target": "TEST", "ephem_file": "fake.dat", "t_timescale": "TDB"})
+    write_csv(path, cols, meta={"target": "TEST", "ephem_file": "fake.dat", "in_timescale": "TDB"})
     return grid, y
 
 

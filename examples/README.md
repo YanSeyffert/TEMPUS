@@ -37,6 +37,9 @@ Copy a config and edit to build your own run. The runner prints the fully assemb
 
 ## Current option notes
 
+- **`--zero`** (in every config's `EXTRA_ARGS`) writes TCB−TCX already zeroed
+  at the IAU 1977 origin, which each config's span contains; without it, the
+  offset is 0 at the first sample, and wouldn't be compliant with IAU def. yet.
 - All O(c⁻⁴) terms are always included unless you add `--pn1` to `EXTRA_ARGS` 
 which limits to O(c⁻²)
 - **All JD inputs are in the ephemeris-native timescale** (TDB for DE/EPM and

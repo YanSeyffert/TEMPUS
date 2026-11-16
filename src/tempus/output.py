@@ -168,7 +168,8 @@ def write_run_json(path: str | Path, meta: dict) -> None:
 # Makes lists of specified keys, on one line, instead of line breaks after each list item.
 def _dumps_pretty_json(meta: dict) -> str:
     compact_list_keys = {
-        "asteroid_indices", 
+        "asteroid_indices",
+        "epoch",          # split JD of the --zero epoch: [int, frac]
         #"ext_resolved",
     }
 

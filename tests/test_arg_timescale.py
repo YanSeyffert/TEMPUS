@@ -7,6 +7,7 @@
 # event map, exposed as `tempus chebyshev --also-wrt-tcx`.
 
 import numpy as np
+import pytest
 from numpy.testing import assert_allclose
 
 from tempus.chebycode import ChebyshevSeries
@@ -95,7 +96,7 @@ def test_cli_tdb_closed_form(tmp_path):
     csv = tmp_path / "run.csv"
     write_csv(csv, {"JD_int": grid.jd_int, "JD_frac": grid.jd_frac,
                     "SecondsPastJ2000": grid.et(), "TCB_minus_TCX": y},
-              meta={"target": "TDB-TEST", "t_timescale": "TCB"})
+              meta={"target": "TDB-TEST", "in_timescale": "TCB"})
 
     rc = main(["chebyshev", str(csv), "--also-wrt-tcx",
                "--order", "5", "--granule-len", "8", "--max-err", "1e-9"])
@@ -140,8 +141,43 @@ def test_anchor_1977_outside_span_errors(tmp_path):
     t = (grid.jd_int - grid.jd_int[0]).astype(np.float64) + grid.jd_frac
     csv = tmp_path / "run.csv"
     write_csv(csv, {"JD_int": grid.jd_int, "JD_frac": grid.jd_frac,
-                    "SecondsPastJ2000": grid.et(), "TCB_minus_TCX": np.sin(0.5 * t)}, meta={})
+                    "SecondsPastJ2000": grid.et(), "TCB_minus_TCX": np.sin(0.5 * t)},
+              meta={"in_timescale": "TCB"})
     assert main(["chebyshev", str(csv), "--anchor", "--max-err", "1e-8"]) == 2
+
+
+@pytest.mark.parametrize("timescale", ["TCB", "TDB"])
+def test_bare_anchor_places_1977_origin_on_the_csv_axis(tmp_path, timescale):
+    # y = 1 s/day * (t - grid start): the anchored fit is exactly linear, so its
+    # value at an epoch measures that epoch's distance from the zero in days.
+    grid = jd_grid(2443140, 0.0, 2443150, 0.0, 0.25)
+    t = (grid.jd_int - grid.jd_int[0]).astype(np.float64) + grid.jd_frac
+    csv = tmp_path / "run.csv"
+    write_csv(csv, {"JD_int": grid.jd_int, "JD_frac": grid.jd_frac,
+                    "SecondsPastJ2000": grid.et(), "TCB_minus_TCX": t},
+              meta={"in_timescale": timescale})
+    assert main(["chebyshev", str(csv), "--anchor", "--max-err", "1e-10"]) == 0
+    asc = csv.with_suffix(".asc")
+    cs = ChebyshevSeries.from_asc(str(asc))
+
+    tdb0_days = TDB0_S / DAY_S                      # the origin's TDB date is T0 + TDB0/86400
+    zero_frac = _T0_FRAC + (tdb0_days if timescale == "TDB" else 0.0)
+    at = lambda frac: cs.evaluate(np.array([_T0_INT], dtype=np.int64), np.array([frac]))[0]
+    assert abs(at(zero_frac)) < 1e-12
+    if timescale == "TDB":
+        assert_allclose(at(_T0_FRAC), -tdb0_days, rtol=0.0, atol=1e-14)   # T0 itself is 65.5 us later
+    title = asc.read_text().splitlines()[0]
+    assert f"argument_timescale={timescale}" in title
+    assert f"zero={timescale}:JD{_T0_INT}+{float(zero_frac)!r}(IAU1977)" in title
+
+
+def test_bare_anchor_without_timescale_errors(tmp_path):
+    grid = jd_grid(2443140, 0.0, 2443150, 0.0, 0.25)
+    t = (grid.jd_int - grid.jd_int[0]).astype(np.float64) + grid.jd_frac
+    csv = tmp_path / "run.csv"
+    write_csv(csv, {"JD_int": grid.jd_int, "JD_frac": grid.jd_frac,
+                    "SecondsPastJ2000": grid.et(), "TCB_minus_TCX": t}, meta={})
+    assert main(["chebyshev", str(csv), "--anchor", "--max-err", "1e-10"]) == 2
 
 
 def test_anchor_refuses_non_integration_column(tmp_path):
