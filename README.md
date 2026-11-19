@@ -101,9 +101,9 @@ bash scripts/download_data.sh inpop de440 de430 asteroids epm
 The script's additional group `inpop_asc` adds INPOP's own TCG−TCB file, and `scripts/fetch_klioner_asc.py` downloads Klioner's time ephemerides; both are only needed for the validation notebooks. Only the locally built GM header supplements (`header_mba.19a`, `header_mba.21a`, `header_kbo.440`) are included in the repository. For more info see [scripts/README.md](scripts/README.md).
 
 ### Examples
-TEMPUS provides a CLI for reproducible/automatable runs. See the folder `examples/` for ready-to-run configs (for each ephemeris family: DE, INPOP, EPM) driven by `run_tempus.sh`. For more infos see [examples/README.md](examples/README.md). The `notebooks/` provide the full walkthroughs.
+TEMPUS provides a CLI for reproducible/automatable runs. See the folder `examples/` for ready-to-run configs (for each ephemeris family: DE, INPOP, EPM) driven by `run_tempus.sh`. For more infos see [examples/README.md](examples/README.md). The `notebooks/` provide the full walkthroughs; special attention to the end of notebook 00 and notebooks 07-09, if you want to skip reading the detailed validation notebooks/tests.
 
-CLI example computing TCB-TCM for Mars (w.r.t. SSB) over 100 years, which outputs a .csv file and a corresponding .json file with metadata of the run/command:
+Quick CLI example computing TCB-TCM for Mars (w.r.t. SSB) over 100 years, which outputs a .csv file and a corresponding .json file with metadata of the run/command:
 
 ```bash
 # Compute TCB-TCM for Mars with CALCEPH backend, 1977 to ~2077 in JD(TCB), zeroed at the 1977 origin
