@@ -150,11 +150,12 @@ tempus chebyshev output/mars_1977_2077_tcm.csv --max-err 1e-9
 ```bash
 tempus integrate \
   --eph-file data/ephem/inpop19a_TCB_m100_p100_tcg.dat \
-  --jd-start 2451545 0.000130251 \
-  --jd-end   2451910 0.000130251 \
+  --jd-start 2443144 0.5 \
+  --jd-end   2479669 0.5 \
   --jd-step  0.75 \
   --target MOON \
-  --center EARTH_CENTER
+  --center EARTH_CENTER \
+  --zero 
 ```
 
 A non-SSB `--center` computes `TC_center − TC_target` (here TCG−TCL) **as a function of TCB** by BCRS subtraction of two SSB-centered integrations (`model.Delta_TCX_TCY`). The output column is named accordingly (`TCG_minus_TCL`) and the run metadata records `"difference_mode": "bcrs_subtraction", "simultaneity": "TCB"`. The Lorentz-boost / simultaneity term −**v**_E·**r**_LE/c² (≲136 µs monthly oscillation for Earth–Moon) is deliberately **not** applied, which would convert to the geocentric-simultaneity description. See `notebooks/07_example_tcl_tcg_subtraction.ipynb` for both descriptions side by side.
