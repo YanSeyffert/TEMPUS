@@ -177,6 +177,9 @@ See [Developer_Notes.md](docs/DEVELOPER_NOTES.md)
 
 Maintained by: Yan SEYFFERT, Agnès FIENGA.
 
+## Citation
+If you use TEMPUS, please cite the TEMPUS paper ([arXiv:2609.08979](https://arxiv.org/abs/2609.08979)). The archived release can be cited in addition: [10.5281/zenodo.24199182](https://doi.org/10.5281/zenodo.24199182). Citation metadata is in the [`CITATION.cff`](CITATION.cff) (also available via GitHub's "Cite this repository" button).
+
 ## License
 
 TEMPUS is released under the **BSD 3-Clause License** (BSD-3-Clause) — see [LICENCE](LICENCE).
